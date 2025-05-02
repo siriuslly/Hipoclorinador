@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Hipoclorinador Funcional</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #e6f2ff;
+      margin: 20px;
+    }
+    h1, h2 {
+      text-align: center;
+      color: #004080;
+    }
+    .container {
+      max-width: 1000px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    label {
+      font-weight: bold;
+    }
+    select, input[type="number"], input[type="text"], button {
+      width: 100%;
+      padding: 8px;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+    button {
+      background-color: #0066cc;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0055a3;
+    }
+    #resultado {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      background-color: #f9f9f9;
+    }
+    canvas {
+      margin-top: 20px;
+    }
+    .contaminante-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+    .contaminante-item select, .contaminante-item input {
+      margin: 0 5px;
+    }
+    .contaminante-item button {
+      width: auto;
+      padding: 5px 10px;
+    }
+    .unidad-select {
+      width: 80px !important;
+    }
+    .cantidad-input {
+      width: 100px !important;
+    }
+    .nivel-seguridad {
+      padding: 15px;
+      border-radius: 8px;
+      margin: 20px 0;
+      font-weight: bold;
+      text-align: center;
+    }
+    .nivel-1 {
+      background-color: #4CAF50;
+      color: white;
+    }
+    .nivel-2 {
+      background-color: #8BC34A;
+      color: white;
+    }
+    .nivel-3 {
+      background-color: #FFC107;
+      color: #333;
+    }
+    .nivel-4 {
+      background-color: #FF9800;
+      color: white;
+    }
+    .nivel-5 {
+      background-color: #F44336;
+      color: white;
+    }
+    .advertencia {
+      background-color: #FFF3CD;
+      color: #856404;
+      padding: 10px;
+      border-radius: 5px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <img src="https://upload.wikimedia.org/wikipedia/commons/3/3f/Logo_example.png" alt="Logo" style="display:block; margin:auto; width:120px;">
+  <h1 id="titulo">Hipoclorinador de Aguas</h1>
+
+  <label for="idioma">Selecciona Idioma:</label>
+  <select id="idioma">
+    <option value="es">Español</option>
+    <option value="en">English</option>
+  </select>
+
+  <label id="tipoAguaLabel" for="tipoAgua">Tipo de Agua:</label>
+  <select id="tipoAgua">
+    <option value="">-- Selecciona --</option>
+    <option value="domestica">Doméstica</option>
+    <option value="industrial">Industrial</option>
+    <option value="hospitalaria">Hospitalaria</option>
+    <option value="residual">Residual</option>
+  </select>
+
+  <label id="phLabel" for="ph">pH del Agua:</label>
+  <input type="number" id="ph" step="0.1" min="0" max="14" value="7.0">
+
+  <label id="turbidezLabel" for="turbidez">Turbidez del Agua (NTU):</label>
+  <input type="number" id="turbidez" step="0.1" min="0" value="5">
+
+  <div id="contaminantesContainer">
+    <h3 id="contaminantesTitle">Contaminantes</h3>
+    <div id="contaminantesList"></div>
+    <button type="button" id="addContaminanteBtn">Agregar Contaminante</button>
+  </div>
+
+  <label id="concentracionLabel" for="concentracion">Concentración de Hipoclorito (%):</label>
+  <input type="number" id="concentracion" step="0.1" min="5" max="15" value="13">
+
+  <label id="litrosAguaLabel" for="litrosAgua">Litros de Agua a Tratar:</label>
+  <input type="number" id="litrosAgua" step="0.1" min="1" value="1000">
+
+  <button id="calcularBtn">Calcular</button>
+
+  <div id="resultado"></div>
+
+  <canvas id="grafica" width="400" height="200"></canvas>
+
+  <button id="exportarPdfBtn">Exportar a PDF</button>
+  <button id="guardarDatosBtn">Guardar Resultado</button>
+  <button id="compararDatosBtn">Comparar Datos</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+// Variables globales
+let myChart = null;
+let datosGuardados = [];
+let contaminantesSeleccionados = [];
+
+// Constantes científicas
+const DOSIS_BASE = 2.0;
+const RESIDUAL_MAXIMO = 0.5;
+const CONCENTRACION_MINIMA = 5;
+const CONCENTRACION_MAXIMA = 15;
+
+// Normativas actualizadas 2025
+const normativas = {
+  NOM_127: {
+    metalesPesados: {
+      arsenico: 0.01,
+      plomo: 0.005,
+      mercurio: 0.001,
+      cromo: 0.05,
+      cadmio: 0.003,
+      cobre: 1.3,
+      zinc: 5.0
+    },
+    fisicoquimicos: {
+      turbidez: 5,
+      pH: {
+        min: 6.5,
+        max: 8.5
+      }
+    }
+  }
+};
+
+// Datos de contaminantes por tipo de agua
+const contaminantesPorTipo = {
+  domestica: {
+    comunes: ["Materia Orgánica", "Grasas y Aceites", "Detergentes", "Sólidos Suspendidos"],
+    pesados: ["Plomo", "Cobre", "Zinc"]
+  },
+  industrial: {
+    comunes: ["Hidrocarburos", "Disolventes", "Materia Orgánica", "Sólidos Sedimentables"],
+    pesados: ["Cromo", "Mercurio", "Cadmio", "Plomo"]
+  },
+  hospitalaria: {
+    comunes: ["Residuos Biológicos", "Medicamentos", "Materia Orgánica", "Patógenos"],
+    pesados: ["Mercurio", "Cadmio"]
+  },
+  residual: {
+    comunes: ["Materia Orgánica", "Nutrientes (N, P)", "Coliformes Fecales", "Sólidos Disueltos"],
+    pesados: ["Arsénico", "Plomo", "Mercurio"]
+  }
+};
+
+// Factores de seguridad ajustados
+const factoresSeguridad = {
+  domestica: 1.05,
+  industrial: 1.10,
+  hospitalaria: 1.15,
+  residual: 1.07
+};
+
+// Inicialización al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+  // Asignar eventos
+  document.getElementById('idioma').addEventListener('change', cambiarIdioma);
+  document.getElementById('tipoAgua').addEventListener('change', actualizarContaminantes);
+  document.getElementById('addContaminanteBtn').addEventListener('click', agregarContaminante);
+  document.getElementById('calcularBtn').addEventListener('click', calcular);
+  document.getElementById('exportarPdfBtn').addEventListener('click', exportarPDF);
+  document.getElementById('guardarDatosBtn').addEventListener('click', guardarDatos);
+  document.getElementById('compararDatosBtn').addEventListener('click', comparar);
+  
+  // Inicializar traducción
+  cambiarIdioma();
+});
+
+function actualizarContaminantes() {
+  const tipo = document.getElementById('tipoAgua').value;
+  const comunes = contaminantesPorTipo[tipo]?.comunes || [];
+  const pesados = contaminantesPorTipo[tipo]?.pesados || [];
+  
+  document.getElementById('contaminantesList').innerHTML = '';
+  contaminantesSeleccionados = [];
+  
+  const todosContaminantes = [...comunes, ...pesados];
+  contaminantesPorTipo[tipo].todos = todosContaminantes;
+}
+
+function agregarContaminante() {
+  const tipo = document.getElementById('tipoAgua').value;
+  if (!tipo) {
+    alert("Por favor selecciona primero el tipo de agua");
+    return;
+  }
+  
+  const todosContaminantes = contaminantesPorTipo[tipo].todos;
+  if (!todosContaminantes || todosContaminantes.length === 0) {
+    alert("No hay contaminantes disponibles para este tipo de agua");
+    return;
+  }
+  
+  const div = document.createElement('div');
+  div.className = 'contaminante-item';
+  
+  const select = document.createElement('select');
+  todosContaminantes.forEach(cont => {
+    const option = document.createElement('option');
+    option.value = cont;
+    option.textContent = cont;
+    select.appendChild(option);
+  });
+  
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.className = 'cantidad-input';
+  input.step = '0.01';
+  input.min = '0';
+  input.value = '0';
+  
+  const unidadSelect = document.createElement('select');
+  unidadSelect.className = 'unidad-select';
+  ['mg/L', 'ppm', '%'].forEach(unidad => {
+    const option = document.createElement('option');
+    option.value = unidad;
+    option.textContent = unidad;
+    unidadSelect.appendChild(option);
+  });
+  
+  const removeBtn = document.createElement('button');
+  removeBtn.textContent = 'X';
+  removeBtn.addEventListener('click', function() {
+    div.remove();
+    actualizarListaContaminantes();
+  });
+  
+  div.appendChild(select);
+  div.appendChild(input);
+  div.appendChild(unidadSelect);
+  div.appendChild(removeBtn);
+  
+  document.getElementById('contaminantesList').appendChild(div);
+  
+  // Actualizar lista cuando cambian valores
+  select.addEventListener('change', actualizarListaContaminantes);
+  input.addEventListener('change', actualizarListaContaminantes);
+  unidadSelect.addEventListener('change', actualizarListaContaminantes);
+}
+
+function actualizarListaContaminantes() {
+  contaminantesSeleccionados = [];
+  const items = document.querySelectorAll('.contaminante-item');
+  
+  items.forEach(item => {
+    const select = item.querySelector('select');
+    const input = item.querySelector('input');
+    const unidad = item.querySelector('select.unidad-select');
+    
+    if (select && input && unidad) {
+      contaminantesSeleccionados.push({
+        nombre: select.value,
+        cantidad: parseFloat(input.value) || 0,
+        unidad: unidad.value
+      });
+    }
+  });
+}
+
+function determinarNivelPeligrosidad(ph, turbidez, metalesPesados, cloroResidual) {
+  let nivel = 1;
+  let razones = [];
+  
+  // Evaluación de pH
+  if (ph < 4 || ph > 11) {
+    nivel = Math.max(nivel, 5);
+    razones.push(`pH extremo (${ph.toFixed(1)})`);
+  } else if (ph < 5 || ph > 9.5) {
+    nivel = Math.max(nivel, 4);
+    razones.push(`pH fuera de rango seguro (${ph.toFixed(1)})`);
+  } else if (ph < 6 || ph > 8.5) {
+    nivel = Math.max(nivel, 3);
+    razones.push(`pH fuera del rango ideal (${ph.toFixed(1)})`);
+  } else if (ph < 6.5 || ph > 8) {
+    nivel = Math.max(nivel, 2);
+  }
+  
+  // Evaluación de turbidez
+  if (turbidez > 100) {
+    nivel = Math.max(nivel, 5);
+    razones.push(`Turbidez extremadamente alta (${turbidez.toFixed(1)} NTU)`);
+  } else if (turbidez > 30) {
+    nivel = Math.max(nivel, 4);
+    razones.push(`Turbidez alta (${turbidez.toFixed(1)} NTU)`);
+  } else if (turbidez > 10) {
+    nivel = Math.max(nivel, 3);
+    razones.push(`Turbidez elevada (${turbidez.toFixed(1)} NTU)`);
+  } else if (turbidez > 5) {
+    nivel = Math.max(nivel, 2);
+  }
+  
+  // Evaluación de metales pesados
+  metalesPesados.forEach(item => {
+    const metalKey = Object.keys(normativas.NOM_127.metalesPesados).find(m => 
+      item.metal.toLowerCase().includes(m.toLowerCase())
+    );
+    
+    if (metalKey) {
+      const limite = normativas.NOM_127.metalesPesados[metalKey];
+      const valor = item.valor;
+      
+      if (valor > limite * 20) {
+        nivel = Math.max(nivel, 5);
+        razones.push(`${metalKey} extremo (${valor.toFixed(4)} mg/L)`);
+      } else if (valor > limite * 10) {
+        nivel = Math.max(nivel, 4);
+        razones.push(`${metalKey} muy elevado (${valor.toFixed(4)} mg/L)`);
+      } else if (valor > limite * 3) {
+        nivel = Math.max(nivel, 3);
+        razones.push(`${metalKey} elevado (${valor.toFixed(4)} mg/L)`);
+      } else if (valor > limite) {
+        nivel = Math.max(nivel, 2);
+      }
+    }
+  });
+  
+  // Evaluación de cloro residual
+  if (cloroResidual > 5) {
+    nivel = Math.max(nivel, 5);
+    razones.push(`Cloro residual extremo (${cloroResidual.toFixed(2)} mg/L)`);
+  } else if (cloroResidual > 2) {
+    nivel = Math.max(nivel, 4);
+    razones.push(`Cloro residual muy alto (${cloroResidual.toFixed(2)} mg/L)`);
+  } else if (cloroResidual > RESIDUAL_MAXIMO) {
+    nivel = Math.max(nivel, 3);
+    razones.push(`Cloro residual alto (${cloroResidual.toFixed(2)} mg/L)`);
+  } else if (cloroResidual < 0.1) {
+    nivel = Math.max(nivel, 4);
+    razones.push(`Cloro residual muy bajo (${cloroResidual.toFixed(2)} mg/L)`);
+  } else if (cloroResidual < 0.2) {
+    nivel = Math.max(nivel, 3);
+  }
+  
+  return { nivel, razones };
+}
+
+function generarMensajeNivel(nivel, razones) {
+  const niveles = [
+    {
+      clase: "nivel-1",
+      titulo: "AGUA SEGURA - Cumple con NOM-127-SSA1-2024",
+      recomendacion: "Apta para todos los usos incluyendo consumo humano directo."
+    },
+    {
+      clase: "nivel-2",
+      titulo: "AGUA MODERADAMENTE SEGURA - Pequeñas desviaciones",
+      recomendacion: "Apta para consumo humano con tratamiento mínimo (filtración/hervido)."
+    },
+    {
+      clase: "nivel-3",
+      titulo: "AGUA CON RIESGO MODERADO - Requiere atención",
+      recomendacion: "No apta para consumo directo. Requiere filtración avanzada y desinfección."
+    },
+    {
+      clase: "nivel-4",
+      titulo: "AGUA PELIGROSA - No apta para consumo humano",
+      recomendacion: "Uso restringido a limpieza. Requiere tratamiento profesional."
+    },
+    {
+      clase: "nivel-5",
+      titulo: "AGUA EXTREMADAMENTE PELIGROSA - Riesgo sanitario grave",
+      recomendacion: "Evite todo contacto. Reporte a autoridades sanitarias."
+    }
+  ];
+  
+  const { clase, titulo, recomendacion } = niveles[nivel - 1];
+  
+  return `<div class="nivel-seguridad ${clase}">
+    <h3>${titulo}</h3>
+    <p>${recomendacion}</p>
+    ${razones.length > 0 ? `<div><h4>Razones:</h4><ul>${razones.map(r => `<li>${r}</li>`).join('')}</ul></div>` : ''}
+  </div>`;
+}
+
+function calcular() {
+  // Obtener valores del formulario
+  const ph = parseFloat(document.getElementById('ph').value);
+  const turbidez = parseFloat(document.getElementById('turbidez').value);
+  const concentracion = parseFloat(document.getElementById('concentracion').value);
+  const litros = parseFloat(document.getElementById('litrosAgua').value);
+  const tipoAgua = document.getElementById('tipoAgua').value;
+
+  // Validaciones básicas
+  if (!tipoAgua) {
+    alert("Por favor selecciona el tipo de agua");
+    return;
+  }
+  
+  if (isNaN(litros) || litros <= 0) {
+    alert("Por favor ingresa un volumen de agua válido");
+    return;
+  }
+  
+  if (isNaN(concentracion) || concentracion < CONCENTRACION_MINIMA || concentracion > CONCENTRACION_MAXIMA) {
+    alert(`La concentración debe estar entre ${CONCENTRACION_MINIMA}% y ${CONCENTRACION_MAXIMA}%`);
+    return;
+  }
+  
+  if (isNaN(ph) || ph < 0 || ph > 14) {
+    alert("El pH debe estar entre 0 y 14");
+    return;
+  }
+  
+  if (isNaN(turbidez) || turbidez < 0) {
+    alert("La turbidez no puede ser negativa");
+    return;
+  }
+
+  // Calcular factor basado en contaminantes
+  let factorContaminantes = 1;
+  let sumaContaminantes = 0;
+  const metalesPesados = [];
+  
+  contaminantesSeleccionados.forEach(cont => {
+    // Convertir todas las unidades a mg/L para el cálculo
+    let valorMgL = cont.cantidad;
+    if (cont.unidad === 'ppm') {
+      valorMgL = cont.cantidad;
+    } else if (cont.unidad === '%') {
+      valorMgL = cont.cantidad * 10000;
+    }
+    
+    sumaContaminantes += valorMgL;
+    
+    // Verificar límites de metales pesados
+    const metalKey = Object.keys(normativas.NOM_127.metalesPesados).find(m => 
+      cont.nombre.toLowerCase().includes(m.toLowerCase())
+    );
+    
+    if (metalKey) {
+      metalesPesados.push({ 
+        metal: metalKey, 
+        valor: valorMgL 
+      });
+    }
+  });
+  
+  // Ajustar factor según la suma de contaminantes
+  if (sumaContaminantes > 0) {
+    factorContaminantes = 1 + (sumaContaminantes / 5000);
+  }
+  
+  // Ajustar factor según pH
+  let factorPH = 1;
+  if (ph < 6.5) {
+    factorPH = 1.1;
+  } else if (ph > 8.5) {
+    factorPH = 1.2;
+  }
+  
+  // Factor por tipo de agua
+  const factorTipo = factoresSeguridad[tipoAgua] || 1.0;
+  
+  // 1. Cálculo BASE sin factores (preciso)
+  let hipocloritoML = (DOSIS_BASE * litros * 1000) / (concentracion * 10000);
+  
+  // 2. Aplicar factores con límite seguro
+  hipocloritoML = hipocloritoML * factorContaminantes * factorPH * factorTipo;
+  
+  // 3. Calcular cloro residual REALISTA
+  let cloroResidual = (hipocloritoML * concentracion * 10) / (litros * 1.25);
+  
+  // 4. Ajustar si excede el límite seguro
+  let ajusteNecesario = false;
+  if (cloroResidual > RESIDUAL_MAXIMO) {
+    const factorCorreccion = RESIDUAL_MAXIMO / cloroResidual;
+    hipocloritoML *= factorCorreccion;
+    cloroResidual = RESIDUAL_MAXIMO;
+    ajusteNecesario = true;
+  }
+
+  // Determinar nivel de peligrosidad
+  const { nivel, razones } = determinarNivelPeligrosidad(
+    ph, 
+    turbidez, 
+    metalesPesados, 
+    cloroResidual
+  );
+  
+  // Mostrar resultados
+  const resultadoDiv = document.getElementById('resultado');
+  resultadoDiv.innerHTML = `
+    <h2>Resultado:</h2>
+    <p><strong>Litros de Agua:</strong> ${litros.toFixed(1)} L</p>
+    <p><strong>Concentración de Hipoclorito:</strong> ${concentracion.toFixed(1)}%</p>
+    <p><strong>pH del agua:</strong> ${ph.toFixed(1)}</p>
+    <p><strong>Turbidez del agua:</strong> ${turbidez.toFixed(1)} NTU</p>
+    <h3>Contaminantes:</h3>
+    ${contaminantesSeleccionados.length > 0 ? 
+      `<ul>${contaminantesSeleccionados.map(c => 
+        `<li>${c.nombre}: ${c.cantidad} ${c.unidad}</li>`
+      ).join('')}</ul>` : 
+      '<p>No se especificaron contaminantes</p>'}
+    <p><strong>Hipoclorito Necesario:</strong> ${hipocloritoML.toFixed(2)} mL</p>
+    <p><strong>Cloro residual estimado:</strong> ${cloroResidual.toFixed(2)} mg/L</p>
+    ${ajusteNecesario ? 
+      `<div class="advertencia">
+        <strong>¡Ajuste automático aplicado!</strong> Se limitó la dosis para mantener 
+        el cloro residual ≤ ${RESIDUAL_MAXIMO} mg/L (límite seguro para reúso).
+      </div>` : ''}
+    ${generarMensajeNivel(nivel, razones)}
+  `;
+
+  // Generar gráfica en mL
+  generarGrafica(hipocloritoML, cloroResidual > RESIDUAL_MAXIMO);
+}
+
+function generarGrafica(valorML, excedeLimite) {
+  const ctx = document.getElementById('grafica').getContext('2d');
+  
+  if (myChart) {
+    myChart.destroy();
+  }
+  
+  myChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Hipoclorito Necesario'],
+      datasets: [{
+        label: 'mL de solución',
+        data: [valorML],
+        backgroundColor: excedeLimite ? '#FF9800' : '#4CAF50',
+        borderColor: excedeLimite ? '#E65100' : '#2E7D32',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          beginAtZero: true,
+          title: {
+            display: true,
+            text: 'Mililitros (mL)'
+          }
+        }
+      },
+      plugins: {
+        title: {
+          display: true,
+          text: 'Solución de Hipoclorito Requerida',
+          font: {
+            size: 16
+          }
+        },
+        legend: {
+          display: false
+        }
+      }
+    }
+  });
+}
+
+function exportarPDF() {
+  if (typeof window.jspdf === 'undefined') {
+    alert("Error: La librería para generar PDF no está cargada correctamente");
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  
+  // Configuración inicial
+  doc.setFont('helvetica', 'normal');
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 15;
+  const maxWidth = pageWidth - 2 * margin;
+  
+  // Función para agregar texto con manejo de saltos de línea
+  const addText = (text, x, y, isBold = false, fontSize = 12) => {
+    doc.setFontSize(fontSize);
+    if (isBold) doc.setFont('helvetica', 'bold');
+    
+    // Dividir el texto en líneas que caben en el ancho
+    const lines = doc.splitTextToSize(text, maxWidth);
+    
+    // Agregar cada línea
+    lines.forEach((line) => {
+      if (y > 280) { // Si llega al final de la página
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(line, x, y);
+      y += 7; // Espaciado entre líneas
+    });
+    
+    doc.setFont('helvetica', 'normal'); // Resetear a normal
+    return y;
+  };
+
+  // Título principal
+  let y = 20;
+  y = addText("Reporte de Hipoclorinador", margin, y, true, 16);
+  
+  // Obtener el texto del resultado y procesarlo por secciones
+  const resultado = document.getElementById('resultado').innerText;
+  const sections = resultado.split('\n').filter(line => line.trim() !== '');
+
+  // Procesar cada sección
+  sections.forEach(section => {
+    // Determinar el estilo basado en el contenido
+    if (section.includes("Resultado:") || section.includes("AGUA") || section.includes("Razones:")) {
+      y = addText(section, margin, y, true, 14);
+      y += 3; // Espacio adicional después de títulos
+    } 
+    else if (section.includes("Contaminantes:") || section.includes("Hipoclorito Necesario:") || 
+             section.includes("Cloro residual estimado:")) {
+      y = addText(section, margin, y, true);
+    }
+    // Manejo especial para el mensaje de ajuste automático
+    else if (section.includes("¡Ajuste automático aplicado!")) {
+      // Dividir el mensaje largo en partes
+      const parts = [
+        "¡Ajuste automático aplicado!",
+        "Se limitó la dosis para mantener el cloro residual",
+        `≤ ${RESIDUAL_MAXIMO} mg/L (límite seguro para reúso).`
+      ];
+      
+      parts.forEach(part => {
+        y = addText(part, margin, y, false);
+      });
+    }
+    else {
+      y = addText(section, margin, y);
+    }
+  });
+
+  // Añadir número de páginas
+  const pageCount = doc.internal.getNumberOfPages();
+  for(let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(10);
+    doc.text(`Página ${i} de ${pageCount}`, pageWidth - margin - 20, 290);
+  }
+  
+  // Guardar el PDF
+  doc.save('reporte_hipoclorinador.pdf');
+}
+
+function guardarDatos() {
+  const resultado = document.getElementById('resultado').innerHTML;
+  datosGuardados.push({
+    fecha: new Date().toLocaleString(),
+    contenido: resultado
+  });
+  alert("Resultado guardado para comparación.");
+}
+
+function comparar() {
+  if (datosGuardados.length < 2) {
+    alert("Necesitas al menos dos resultados guardados para comparar.");
+    return;
+  }
+  
+  let comparacionHTML = "<h3>Comparación de Resultados:</h3>";
+  datosGuardados.forEach((dato, index) => {
+    comparacionHTML += `
+      <div style="margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 5px;">
+        <h4>Análisis ${index + 1} (${dato.fecha}):</h4>
+        <div>${dato.contenido}</div>
+      </div>`;
+  });
+  
+  document.getElementById('resultado').innerHTML = comparacionHTML;
+}
+
+function cambiarIdioma() {
+  const idioma = document.getElementById('idioma').value;
+  const elementos = {
+    es: {
+      titulo: "Hipoclorinador de Aguas",
+      tipoAguaLabel: "Tipo de Agua:",
+      phLabel: "pH del Agua:",
+      turbidezLabel: "Turbidez del Agua (NTU):",
+      contaminantesTitle: "Contaminantes",
+      addContaminanteBtn: "Agregar Contaminante",
+      concentracionLabel: "Concentración de Hipoclorito (%):",
+      litrosAguaLabel: "Litros de Agua a Tratar:",
+      calcularBtn: "Calcular",
+      exportarPdfBtn: "Exportar a PDF",
+      guardarDatosBtn: "Guardar Resultado",
+      compararDatosBtn: "Comparar Datos"
+    },
+    en: {
+      titulo: "Water Hypochlorinator",
+      tipoAguaLabel: "Water Type:",
+      phLabel: "Water pH:",
+      turbidezLabel: "Water Turbidity (NTU):",
+      contaminantesTitle: "Contaminants",
+      addContaminanteBtn: "Add Contaminant",
+      concentracionLabel: "Hypochlorite Concentration (%):",
+      litrosAguaLabel: "Water Volume to Treat:",
+      calcularBtn: "Calculate",
+      exportarPdfBtn: "Export to PDF",
+      guardarDatosBtn: "Save Result",
+      compararDatosBtn: "Compare Data"
+    }
+  };
+
+  const traduccion = elementos[idioma];
+  Object.keys(traduccion).forEach(key => {
+    const element = document.getElementById(key);
+    if (element) element.textContent = traduccion[key];
+  });
+}
+</script>
+</body>
+</html>
